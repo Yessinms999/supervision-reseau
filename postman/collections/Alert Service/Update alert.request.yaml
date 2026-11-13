@@ -1,0 +1,15 @@
+$kind: http-request
+url: http://localhost:3002/api/alerts/6af5c0fe620006def3ddbd56
+method: PUT
+body:
+  type: json
+  content: "{\r
+
+    \  \"message\": \"CPU usage critical\",\r
+
+    \  \"severity\": \"CRITICAL\",\r
+
+    \  \"threshold\": 90\r
+
+    }"
+order: 4000

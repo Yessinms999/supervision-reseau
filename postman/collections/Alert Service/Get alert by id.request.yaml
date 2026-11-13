@@ -1,0 +1,4 @@
+$kind: http-request
+url: http://localhost:3002/api/alerts/6af5c0fe620006def3ddbd56
+method: GET
+order: 3000

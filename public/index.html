@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alert Service - Tableau de bord</title>
+<style>
+  :root {
+    --bg:#0f1419; --panel:#1a2029; --line:#2a3340; --text:#e6eaf0; --muted:#8b97a8;
+    --blue:#4f9dff; --red:#ff5a5f; --orange:#ff9f43; --yellow:#f6c945; --green:#3ddc97;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:18px 28px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+  header h1 { margin:0; font-size:20px; }
+  header span { color:var(--muted); font-size:13px; }
+  main { padding:24px 28px; max-width:1300px; margin:0 auto; }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:22px; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .stat small { color:var(--muted); display:block; margin-bottom:6px; }
+  .stat b { font-size:26px; }
+
+  .filters { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; display:grid;
+             grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:18px; }
+  input, select, textarea, button { font:inherit; color:var(--text); background:#111720; border:1px solid var(--line);
+             border-radius:7px; padding:8px 10px; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--blue); border-color:transparent; }
+  button { cursor:pointer; background:var(--blue); border-color:var(--blue); color:#06121f; font-weight:600; }
+  button.ghost { background:transparent; color:var(--text); border-color:var(--line); font-weight:500; }
+  button.danger { background:var(--red); border-color:var(--red); color:#fff; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+
+  .table-wrap { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:auto; }
+  table { width:100%; border-collapse:collapse; min-width:900px; }
+  th, td { padding:11px 14px; text-align:left; border-bottom:1px solid var(--line); font-size:14px; }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; cursor:pointer; user-select:none; white-space:nowrap; }
+  th:hover { color:var(--text); }
+  tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:#1f2733; }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+
+  .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:12px; font-weight:700; }
+  .sev-CRITICAL { background:#ff5a5f22; color:var(--red); }
+  .sev-HIGH     { background:#ff9f4322; color:var(--orange); }
+  .sev-MEDIUM   { background:#f6c94522; color:var(--yellow); }
+  .sev-LOW      { background:#3ddc9722; color:var(--green); }
+  .st-OPEN        { background:#4f9dff22; color:var(--blue); }
+  .st-IN_PROGRESS { background:#f6c94522; color:var(--yellow); }
+  .st-RESOLVED    { background:#3ddc9722; color:var(--green); }
+
+  .actions { display:flex; gap:6px; }
+  .actions button { padding:4px 10px; font-size:12px; }
+
+  .pager { display:flex; align-items:center; justify-content:space-between; margin-top:14px; color:var(--muted); font-size:14px; flex-wrap:wrap; gap:10px; }
+  .pager div { display:flex; gap:8px; align-items:center; }
+
+  .overlay { position:fixed; inset:0; background:#000a; display:none; align-items:center; justify-content:center; padding:20px; z-index:10; }
+  .overlay.show { display:flex; }
+  .modal { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:22px; width:100%; max-width:480px; }
+  .modal h2 { margin:0 0 14px; font-size:18px; }
+  .modal label { display:block; margin:10px 0 4px; color:var(--muted); font-size:13px; }
+  .modal input, .modal select, .modal textarea { width:100%; }
+  .modal .btns { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+  .detail dt { color:var(--muted); font-size:12px; margin-top:10px; }
+  .detail dd { margin:2px 0 0; }
+
+  #toast { position:fixed; bottom:22px; right:22px; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--green);
+           padding:12px 16px; border-radius:8px; display:none; z-index:20; max-width:360px; }
+  #toast.error { border-left-color:var(--red); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Alert Service</h1>
+  <span id="apiState">Connexion...</span>
+</header>
+
+<main>
+  <section class="stats">
+    <div class="stat"><small>Total</small><b id="sTotal">-</b></div>
+    <div class="stat"><small>Ouvertes</small><b id="sOpen">-</b></div>
+    <div class="stat"><small>En cours</small><b id="sProg">-</b></div>
+    <div class="stat"><small>Résolues</small><b id="sRes">-</b></div>
+    <div class="stat"><small>Critiques</small><b id="sCrit">-</b></div>
+  </section>
+
+  <section class="filters">
+    <input id="fSearch" placeholder="Rechercher (message, équipement)">
+    <select id="fSeverity"><option value="">Gravité (toutes)</option><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select>
+    <select id="fStatus"><option value="">Statut (tous)</option><option>OPEN</option><option>IN_PROGRESS</option><option>RESOLVED</option></select>
+    <select id="fMetric"><option value="">Métrique (toutes)</option><option>CPU</option><option>MEMORY</option><option>DISK</option><option>TRAFFIC</option><option>LATENCY</option><option>TEMPERATURE</option></select>
+    <input id="fFrom" type="date" title="Du">
+    <input id="fTo" type="date" title="Au">
+    <select id="fLimit"><option>5</option><option selected>10</option><option>20</option><option>50</option></select>
+    <button class="ghost" id="btnReset">Réinitialiser</button>
+  </section>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="deviceId">Équipement</th>
+          <th>Métrique</th>
+          <th data-sort="value">Valeur / Seuil</th>
+          <th data-sort="severity">Gravité</th>
+          <th data-sort="status">Statut</th>
+          <th>Message</th>
+          <th data-sort="createdAt">Créée le</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" class="empty" style="display:none">Aucune alerte trouvée.</div>
+  </div>
+
+  <div class="pager">
+    <span id="pagerInfo"></span>
+    <div>
+      <button class="ghost" id="btnPrev">Précédent</button>
+      <span id="pageLabel"></span>
+      <button class="ghost" id="btnNext">Suivant</button>
+    </div>
+  </div>
+</main>
+
+<!-- Détail -->
+<div class="overlay" id="ovDetail">
+  <div class="modal">
+    <h2>Détail de l'alerte</h2>
+    <dl class="detail" id="detailBody"></dl>
+    <div class="btns"><button class="ghost" data-close>Fermer</button></div>
+  </div>
+</div>
+
+<!-- Modification -->
+<div class="overlay" id="ovEdit">
+  <div class="modal">
+    <h2>Modifier l'alerte</h2>
+    <label>Message</label>
+    <textarea id="eMessage" rows="3" maxlength="500"></textarea>
+    <label>Gravité</label>
+    <select id="eSeverity"><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select>
+    <label>Seuil</label>
+    <input id="eThreshold" type="number" min="0">
+    <div class="btns">
+      <button class="ghost" data-close>Annuler</button>
+      <button id="btnSave">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Suppression -->
+<div class="overlay" id="ovDelete">
+  <div class="modal">
+    <h2>Supprimer l'alerte ?</h2>
+    <p id="delText" style="color:var(--muted)"></p>
+    <div class="btns">
+      <button class="ghost" data-close>Annuler</button>
+      <button class="danger" id="btnConfirmDelete">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // Si la page est ouverte depuis un fichier, on appelle l'API sur localhost:3002
+  const API = location.protocol === 'file:' ? 'http://localhost:3002' : '';
+
+  const state = { page: 1, sortBy: 'createdAt', order: 'desc', current: null, list: [] };
+  const $ = (id) => document.getElementById(id);
+
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmtDate = (d) => new Date(d).toLocaleString('fr-FR');
+
+  function toast(msg, isError = false) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = isError ? 'error' : '';
+    t.style.display = 'block';
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => (t.style.display = 'none'), 3500);
+  }
+
+  async function api(path, options) {
+    const res = await fetch(API + path, options);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const details = body.errors ? ' : ' + body.errors.map((e) => e.message).join(', ') : '';
+      throw new Error((body.message || 'Erreur ' + res.status) + details);
+    }
+    return body;
+  }
+
+  function buildQuery() {
+    const p = new URLSearchParams();
+    const map = { search: 'fSearch', severity: 'fSeverity', status: 'fStatus', metric: 'fMetric', from: 'fFrom', to: 'fTo' };
+    for (const [key, id] of Object.entries(map)) if ($(id).value) p.set(key, $(id).value);
+    p.set('page', state.page);
+    p.set('limit', $('fLimit').value);
+    p.set('sortBy', state.sortBy);
+    p.set('order', state.order);
+    return p.toString();
+  }
+
+  async function loadAlerts() {
+    try {
+      const r = await api('/api/alerts?' + buildQuery());
+      state.list = r.data;
+      $('apiState').textContent = 'API connectée (port 3002)';
+      $('apiState').style.color = 'var(--green)';
+      render(r);
+    } catch (e) {
+      $('apiState').textContent = 'API injoignable';
+      $('apiState').style.color = 'var(--red)';
+      toast(e.message, true);
+    }
+  }
+
+  function render(r) {
+    $('rows').innerHTML = r.data.map((a) => `
+      <tr>
+        <td><b>${esc(a.deviceId)}</b></td>
+        <td>${esc(a.metric)}</td>
+        <td>${esc(a.value)} / ${esc(a.threshold)}</td>
+        <td><span class="badge sev-${esc(a.severity)}">${esc(a.severity)}</span></td>
+        <td><span class="badge st-${esc(a.status)}">${esc(a.status)}</span></td>
+        <td>${esc(a.message)}</td>
+        <td>${esc(fmtDate(a.createdAt))}</td>
+        <td class="actions">
+          <button class="ghost" data-act="view" data-id="${esc(a._id)}">Voir</button>
+          <button class="ghost" data-act="edit" data-id="${esc(a._id)}">Modifier</button>
+          <button class="danger" data-act="del" data-id="${esc(a._id)}">Suppr.</button>
+        </td>
+      </tr>`).join('');
+
+    $('empty').style.display = r.data.length ? 'none' : 'block';
+    $('pagerInfo').textContent = `${r.total} alerte(s) au total`;
+    $('pageLabel').textContent = `Page ${r.page} / ${Math.max(r.totalPages, 1)}`;
+    $('btnPrev').disabled = r.page <= 1;
+    $('btnNext').disabled = r.page >= r.totalPages;
+  }
+
+  async function loadStats() {
+    try {
+      const count = async (q) => (await api('/api/alerts?limit=1&' + q)).total;
+      const [t, o, p, r, c] = await Promise.all([
+        count(''), count('status=OPEN'), count('status=IN_PROGRESS'),
+        count('status=RESOLVED'), count('severity=CRITICAL')
+      ]);
+      $('sTotal').textContent = t; $('sOpen').textContent = o; $('sProg').textContent = p;
+      $('sRes').textContent = r; $('sCrit').textContent = c;
+    } catch (_) { /* déjà signalé par loadAlerts */ }
+  }
+
+  const refresh = () => { loadAlerts(); loadStats(); };
+
+  // Filtres : on revient à la page 1 à chaque changement
+  let debounce;
+  ['fSearch', 'fSeverity', 'fStatus', 'fMetric', 'fFrom', 'fTo', 'fLimit'].forEach((id) => {
+    $(id).addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => { state.page = 1; loadAlerts(); }, 300);
+    });
+  });
+
+  $('btnReset').onclick = () => {
+    ['fSearch', 'fSeverity', 'fStatus', 'fMetric', 'fFrom', 'fTo'].forEach((id) => ($(id).value = ''));
+    $('fLimit').value = '10';
+    state.page = 1; state.sortBy = 'createdAt'; state.order = 'desc';
+    loadAlerts();
+  };
+
+  $('btnPrev').onclick = () => { state.page--; loadAlerts(); };
+  $('btnNext').onclick = () => { state.page++; loadAlerts(); };
+
+  document.querySelectorAll('th[data-sort]').forEach((th) => {
+    th.onclick = () => {
+      const field = th.dataset.sort;
+      if (state.sortBy === field) state.order = state.order === 'asc' ? 'desc' : 'asc';
+      else { state.sortBy = field; state.order = 'asc'; }
+      state.page = 1;
+      loadAlerts();
+    };
+  });
+
+  // Modales
+  const openModal = (id) => $(id).classList.add('show');
+  const closeModals = () => document.querySelectorAll('.overlay').forEach((o) => o.classList.remove('show'));
+  document.querySelectorAll('[data-close]').forEach((b) => (b.onclick = closeModals));
+  document.querySelectorAll('.overlay').forEach((o) => o.addEventListener('click', (e) => { if (e.target === o) closeModals(); }));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModals(); });
+
+  // Actions sur les lignes
+  $('rows').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+
+    try {
+      if (btn.dataset.act === 'view') {
+        const a = (await api('/api/alerts/' + id)).data;
+        $('detailBody').innerHTML = [
+          ['Identifiant', a._id], ['Équipement', a.deviceId], ['Métrique', a.metric],
+          ['Valeur', a.value], ['Seuil', a.threshold], ['Gravité', a.severity], ['Statut', a.status],
+          ['Message', a.message], ['Assignée à', a.assignedTo || 'Personne'], ['Source', a.source],
+          ['Créée le', fmtDate(a.createdAt)], ['Modifiée le', fmtDate(a.updatedAt)],
+          ['Résolue le', a.resolvedAt ? fmtDate(a.resolvedAt) : '-']
+        ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+        openModal('ovDetail');
+      }
+
+      if (btn.dataset.act === 'edit') {
+        const a = (await api('/api/alerts/' + id)).data;
+        state.current = a._id;
+        $('eMessage').value = a.message;
+        $('eSeverity').value = a.severity;
+        $('eThreshold').value = a.threshold;
+        openModal('ovEdit');
+      }
+
+      if (btn.dataset.act === 'del') {
+        const a = state.list.find((x) => x._id === id);
+        state.current = id;
+        $('delText').textContent = a ? `${a.deviceId} - ${a.message}` : id;
+        openModal('ovDelete');
+      }
+    } catch (err) { toast(err.message, true); }
+  });
+
+  $('btnSave').onclick = async () => {
+    try {
+      await api('/api/alerts/' + state.current, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: $('eMessage').value,
+          severity: $('eSeverity').value,
+          threshold: Number($('eThreshold').value)
+        })
+      });
+      closeModals();
+      toast('Alerte modifiée');
+      refresh();
+    } catch (err) { toast(err.message, true); }
+  };
+
+  $('btnConfirmDelete').onclick = async () => {
+    try {
+      await api('/api/alerts/' + state.current, { method: 'DELETE' });
+      closeModals();
+      toast('Alerte supprimée');
+      if (state.list.length === 1 && state.page > 1) state.page--;
+      refresh();
+    } catch (err) { toast(err.message, true); }
+  };
+
+  refresh();
+</script>
+</body>
+</html>

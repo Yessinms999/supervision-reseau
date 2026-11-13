@@ -1,0 +1,21 @@
+$kind: http-request
+url: http://localhost:3002/api/internal/alerts
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"deviceId\": \"device-001\",\r
+
+    \  \"metric\": \"CPU\",\r
+
+    \  \"value\": 95,\r
+
+    \  \"threshold\": 80,\r
+
+    \  \"severity\": \"HIGH\",\r
+
+    \  \"message\": \"CPU usage too high\"\r
+
+    }"
+order: 6000

@@ -1,0 +1,6 @@
+$kind: http-request
+url: http://localhost:3002/api/alerts?severity=high
+method: GET
+queryParams:
+  severity: high
+order: 8000

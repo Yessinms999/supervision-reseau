@@ -1,0 +1,4 @@
+$kind: http-request
+url: http://localhost:3002/api/alerts/6af5c0fe620006def3ddbd55
+method: DELETE
+order: 5000
